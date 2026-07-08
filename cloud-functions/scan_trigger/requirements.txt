@@ -1,0 +1,12 @@
+# Cloud Function dependencies for the Privacy Platform scan trigger.
+#
+# Deploy with:
+#   gcloud functions deploy scan-trigger \
+#     --runtime python312 \
+#     --trigger-topic scan-events \
+#     --region us-central1 \
+#     --entry-point scan_file
+
+google-cloud-storage>=2.17.0
+google-cloud-dlp>=3.19.0
+google-cloud-pubsub>=2.21.5

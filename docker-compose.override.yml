@@ -1,0 +1,43 @@
+# Docker Compose override for local development.
+# This file is automatically merged with docker-compose.yml when running:
+#   docker compose up
+# For production deployment, use:
+#   docker compose -f docker-compose.yml up
+
+services:
+  backend:
+    volumes:
+      # Mount source code for hot reload with uvicorn --reload
+      - ./backend:/app
+      - ./uploads:/app/uploads
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+    environment:
+      ENVIRONMENT: development
+      LOG_LEVEL: DEBUG
+      CORS_ORIGINS: http://localhost:3000,http://localhost:5173,http://localhost:5174
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      args:
+        VITE_API_URL: http://localhost:8000
+    ports:
+      - "3000:80"
+    volumes:
+      # Mount source for hot reload when using Vite dev server
+      - ./frontend:/app
+      - /app/node_modules
+
+  postgres:
+    ports:
+      - "5432:5432"
+
+  ollama:
+    profiles:
+      - ai
+
+  nginx:
+    ports:
+      - "80:80"

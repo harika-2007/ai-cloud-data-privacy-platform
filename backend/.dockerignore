@@ -1,0 +1,54 @@
+# Python
+.git
+.gitignore
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+
+# Environment
+.env
+.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.coverage.*
+*.cover
+.hypothesis/
+
+# Application runtime (created by Dockerfile)
+uploads/
+reports/
+logs/
+
+# Database
+*.db
+alembic/versions/
+
+# Docker
+Dockerfile
+.docker/
+
+# Logs
+*.log

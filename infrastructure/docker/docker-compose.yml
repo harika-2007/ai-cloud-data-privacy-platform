@@ -1,0 +1,96 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: privacy-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: privacy_platform
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_PORT: 5432
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d privacy_platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - app-network
+
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    container_name: privacy-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/privacy_platform
+      DATABASE_SYNC_URL: postgresql://postgres:postgres@postgres:5432/privacy_platform
+      SECRET_KEY: ${SECRET_KEY:-local-dev-secret-key-change-in-production}
+      DEBUG: "${DEBUG:-true}"
+      ENVIRONMENT: "${ENVIRONMENT:-development}"
+      OLLAMA_BASE_URL: http://ollama:11434
+      AI_ENABLED: "${AI_ENABLED:-true}"
+      CORS_ORIGINS: http://localhost:5173,http://localhost:3000,http://frontend
+      GCS_BUCKET_NAME: "${GCS_BUCKET_NAME:-}"
+      GOOGLE_CLOUD_PROJECT: "${GOOGLE_CLOUD_PROJECT:-}"
+      DLP_ENABLED: "${DLP_ENABLED:-false}"
+      PUBSUB_ENABLED: "${PUBSUB_ENABLED:-false}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+    volumes:
+      - ../../backend:/app
+      - uploads-data:/app/uploads
+      - reports-data:/app/reports
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+    container_name: privacy-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: privacy-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+    driver: local
+  uploads-data:
+    driver: local
+  reports-data:
+    driver: local
+  ollama-models:
+    driver: local
