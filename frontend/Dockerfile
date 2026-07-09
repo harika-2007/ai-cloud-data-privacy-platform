@@ -9,8 +9,12 @@ RUN npm ci
 COPY . .
 
 # Build args for environment-specific configuration
-ARG VITE_API_URL=http://localhost:8000
+# VITE_API_URL: Backend API URL (default: empty for nginx proxy)
+# VITE_GOOGLE_CLIENT_ID: Google OAuth Client ID
+ARG VITE_API_URL=""
+ARG VITE_GOOGLE_CLIENT_ID=""
 ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
 
 RUN npm run build
 

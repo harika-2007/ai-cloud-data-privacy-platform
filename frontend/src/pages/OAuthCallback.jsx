@@ -1,11 +1,19 @@
 import { useEffect, useRef } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { TOKEN_KEYS } from '../utils/constants';
 import Loading from '../components/Common/Loading';
 
+/**
+ * OAuth Callback Page
+ *
+ * Receives JWT tokens from the backend after a successful Google OAuth
+ * sign-in. Tokens are delivered via URL fragment (#) to prevent them
+ * from being logged by nginx / reverse proxies or stored in browser history.
+ *
+ * Also handles error redirects via query params (?) for error cases.
+ */
 export default function OAuthCallback() {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { fetchUser } = useAuth();
   const processed = useRef(false);
@@ -14,8 +22,14 @@ export default function OAuthCallback() {
     if (processed.current) return;
     processed.current = true;
 
-    const accessToken = searchParams.get('access_token');
-    const refreshToken = searchParams.get('refresh_token');
+    // Parse tokens from URL fragment (#) — the secure delivery mechanism
+    const hash = window.location.hash || '';
+    const hashParams = new URLSearchParams(hash.replace(/^#/, ''));
+    const accessToken = hashParams.get('access_token');
+    const refreshToken = hashParams.get('refresh_token');
+
+    // Parse errors from query params (?) — error delivery is not sensitive
+    const searchParams = new URLSearchParams(window.location.search);
     const error = searchParams.get('error');
 
     if (error) {
@@ -29,6 +43,9 @@ export default function OAuthCallback() {
         localStorage.setItem(TOKEN_KEYS.REFRESH, refreshToken);
       }
 
+      // Clear the fragment from the URL without triggering a page reload
+      window.location.hash = '';
+
       // Fetch user profile and redirect to dashboard
       fetchUser().then(() => {
         navigate('/dashboard', { replace: true });
@@ -38,7 +55,7 @@ export default function OAuthCallback() {
     } else {
       navigate('/login?error=no_token', { replace: true });
     }
-  }, [searchParams, navigate, fetchUser]);
+  }, [navigate, fetchUser]);
 
   return <Loading fullScreen />;
 }

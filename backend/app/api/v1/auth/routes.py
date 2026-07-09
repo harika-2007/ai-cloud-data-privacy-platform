@@ -44,6 +44,77 @@ def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
 
 
 # =========================================================================
+# Dynamic URL helpers
+# =========================================================================
+
+
+def get_base_url(request: Request) -> str:
+    """Determine the base URL of the current request.
+
+    Respects X-Forwarded-Proto and X-Forwarded-Host headers (set by
+    nginx/reverse proxies). Falls back to the direct request URL.
+    Also checks NGROK_URL and PUBLIC_URL env vars for explicit overrides.
+    """
+    # 1. Explicit override via env var (highest priority)
+    if settings.NGROK_URL:
+        return settings.NGROK_URL.rstrip("/")
+    if settings.PUBLIC_URL:
+        return settings.PUBLIC_URL.rstrip("/")
+
+    # 2. X-Forwarded-* headers (set by nginx reverse proxy)
+    forwarded_proto = request.headers.get("X-Forwarded-Proto", "")
+    forwarded_host = request.headers.get("X-Forwarded-Host", "")
+    if forwarded_proto and forwarded_host:
+        return f"{forwarded_proto}://{forwarded_host}"
+
+    # 3. Direct Host header
+    host = request.headers.get("Host", "localhost:8000")
+    # Determine scheme from the request itself
+    if forwarded_proto:
+        scheme = forwarded_proto
+    elif request.url.scheme:
+        scheme = request.url.scheme
+    else:
+        scheme = "http"
+    return f"{scheme}://{host}"
+
+
+def get_google_redirect_uri(request: Request) -> str:
+    """Generate the Google OAuth redirect URI dynamically.
+
+    Returns the explicitly configured GOOGLE_REDIRECT_URI if set,
+    otherwise constructs it from the request's base URL.
+    """
+    if settings.GOOGLE_REDIRECT_URI:
+        return settings.GOOGLE_REDIRECT_URI
+    base = get_base_url(request)
+    return f"{base}/api/v1/auth/google/callback"
+
+
+def should_use_secure_cookie(request: Request) -> bool:
+    """Determine if cookies should have the Secure flag.
+
+    Returns True when:
+    - The request is over HTTPS
+    - The environment is production
+    - SECURE_COOKIES is explicitly set to True
+    - Running behind ngrok (ngrok forces HTTPS)
+    """
+    if settings.SECURE_COOKIES:
+        return True
+    if settings.ENVIRONMENT == "production":
+        return True
+    forwarded_proto = request.headers.get("X-Forwarded-Proto", "")
+    if forwarded_proto == "https":
+        return True
+    if request.url.scheme == "https":
+        return True
+    if settings.NGROK_URL:
+        return True
+    return False
+
+
+# =========================================================================
 # Server-side Google OAuth redirect flow
 # =========================================================================
 
@@ -54,27 +125,35 @@ def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
     description="Redirects the user to Google's OAuth 2.0 consent screen. "
     "After authentication, Google redirects back to /auth/google/callback.",
 )
-async def google_login_redirect():
+async def google_login_redirect(request: Request):
     """Redirect the user to Google's OAuth 2.0 consent screen.
 
-    The callback endpoint at /auth/google/callback will exchange the
-    authorization code for tokens, find or create the user, and issue
-    JWT tokens.
+    The redirect_uri is generated dynamically from the current request
+    so it works correctly behind ngrok, reverse proxies, and in
+    production deployments. The state cookie uses Secure and SameSite
+    flags appropriate for the connection.
     """
     if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
-        logger.warning("Google OAuth is not configured (GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is empty)")
+        logger.warning(
+            "Google OAuth is not configured "
+            "(GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is empty)"
+        )
         raise AppException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Google Sign-In is not configured on the server",
             error_code="GOOGLE_OAUTH_NOT_CONFIGURED",
         )
 
+    # Generate redirect URI dynamically
+    redirect_uri = get_google_redirect_uri(request)
+    logger.info("Google OAuth redirect URI: %s", redirect_uri)
+
     # Generate a state value for CSRF protection
     state = secrets.token_urlsafe(32)
 
     params = {
         "client_id": settings.GOOGLE_CLIENT_ID,
-        "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+        "redirect_uri": redirect_uri,
         "response_type": "code",
         "scope": "openid email profile",
         "state": state,
@@ -82,16 +161,23 @@ async def google_login_redirect():
         "prompt": "select_account",
     }
 
-    google_auth_url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
+    google_auth_url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(
+        params
+    )
+
+    secure = should_use_secure_cookie(request)
 
     # Store state in a cookie for CSRF validation on callback
-    response = RedirectResponse(url=google_auth_url, status_code=status.HTTP_302_FOUND)
+    response = RedirectResponse(
+        url=google_auth_url,
+        status_code=status.HTTP_302_FOUND,
+    )
     response.set_cookie(
         key="google_oauth_state",
         value=state,
         max_age=600,
         httponly=True,
-        secure=False,  # localhost dev
+        secure=secure,
         samesite="lax",
     )
     return response
@@ -143,6 +229,9 @@ async def google_callback(
         )
 
     # Exchange authorization code for tokens
+    redirect_uri = get_google_redirect_uri(request)
+    logger.debug("Using redirect_uri for token exchange: %s", redirect_uri)
+
     try:
         async with httpx.AsyncClient() as client:
             token_response = await client.post(
@@ -151,7 +240,7 @@ async def google_callback(
                     "code": code,
                     "client_id": settings.GOOGLE_CLIENT_ID,
                     "client_secret": settings.GOOGLE_CLIENT_SECRET,
-                    "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+                    "redirect_uri": redirect_uri,
                     "grant_type": "authorization_code",
                 },
                 headers={"Accept": "application/json"},
@@ -159,7 +248,9 @@ async def google_callback(
             )
 
             if token_response.status_code != 200:
-                logger.error("Google token exchange failed: %s", token_response.text)
+                logger.error(
+                    "Google token exchange failed: %s", token_response.text
+                )
                 return RedirectResponse(
                     url=f"{settings.FRONTEND_URL}/login?error=token_exchange_failed",
                     status_code=status.HTTP_302_FOUND,
@@ -178,16 +269,17 @@ async def google_callback(
 
             # Get user info from Google
             if id_token_str:
-                # Decode the ID token to get user info (JWT, not opaque)
                 user_info = await verify_google_id_token(id_token_str)
             else:
-                # Fallback: use access token to fetch user info
                 user_info_response = await client.get(
                     "https://www.googleapis.com/oauth2/v2/userinfo",
                     headers={"Authorization": f"Bearer {access_token}"},
                 )
                 if user_info_response.status_code != 200:
-                    logger.error("Failed to fetch Google user info: %s", user_info_response.text)
+                    logger.error(
+                        "Failed to fetch Google user info: %s",
+                        user_info_response.text,
+                    )
                     return RedirectResponse(
                         url=f"{settings.FRONTEND_URL}/login?error=userinfo_failed",
                         status_code=status.HTTP_302_FOUND,
@@ -224,7 +316,6 @@ async def google_callback(
             user = await user_repo.get_by_email(email)
 
         if user:
-            # Update existing user
             update_data = {
                 "google_id": google_id,
                 "provider": "GOOGLE",
@@ -238,7 +329,6 @@ async def google_callback(
                 update_data["name"] = name
             user = await user_repo.update(user.id, **update_data)
         else:
-            # Create new user
             user = await user_repo.create(
                 name=name or email.split("@")[0],
                 email=email,
@@ -257,12 +347,18 @@ async def google_callback(
         refresh_token = auth_service.create_token(user.id, user.role, "refresh")
 
         # Redirect to frontend with tokens
+        # Using URL fragment (#) instead of query params (?) to prevent
+        # tokens from being logged by nginx/reverse proxies or stored
+        # in browser history.
         frontend_callback = (
             f"{settings.FRONTEND_URL}/auth/callback"
-            f"?access_token={access_token}"
+            f"#access_token={access_token}"
             f"&refresh_token={refresh_token}"
         )
-        return RedirectResponse(url=frontend_callback, status_code=status.HTTP_302_FOUND)
+        return RedirectResponse(
+            url=frontend_callback,
+            status_code=status.HTTP_302_FOUND,
+        )
 
     except AppException:
         raise
@@ -293,7 +389,9 @@ async def verify_google_id_token(id_token_str: str) -> dict:
         )
         return decoded_token
     except ImportError:
-        logger.warning("google-auth library not available, using manual verification")
+        logger.warning(
+            "google-auth library not available, using manual verification"
+        )
         return await _verify_google_id_token_manual(id_token_str)
     except ValueError as e:
         logger.error("Google token verification failed: %s", e)
@@ -393,7 +491,8 @@ async def google_login(
     response_model=TokenResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Register a new user",
-    description="Creates a new user account with name, email, and password. Returns JWT tokens on success.",
+    description="Creates a new user account with name, email, and password. "
+    "Returns JWT tokens on success.",
 )
 async def register(
     request: UserRegisterRequest,
@@ -419,7 +518,8 @@ async def register(
     "/login",
     response_model=TokenResponse,
     summary="Authenticate a user",
-    description="Authenticates a user with email and password. Returns JWT tokens on success.",
+    description="Authenticates a user with email and password. Returns JWT tokens "
+    "on success.",
 )
 async def login(
     request: UserLoginRequest,

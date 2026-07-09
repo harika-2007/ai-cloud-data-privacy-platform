@@ -55,7 +55,12 @@ export default function Login() {
   if (isAuthenticated) return <Navigate to="/dashboard" replace />;
 
   const handleGoogleSignIn = () => {
-    window.location.assign('http://localhost:8000/api/v1/auth/google/login');
+    // Use relative URL so it works in all environments:
+    // - Vite dev: proxied by vite.config.js to backend
+    // - Docker/nginx: proxied by nginx to backend
+    // - ngrok: proxied by nginx to backend
+    // - Production: proxied by reverse proxy to backend
+    window.location.assign('/api/v1/auth/google/login');
   };
 
   const validate = () => {

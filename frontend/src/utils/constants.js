@@ -1,4 +1,20 @@
-export const API_BASE_URL = '/api/v1';
+/**
+ * Application constants and configuration.
+ *
+ * VITE_API_URL is set at build time via environment variables:
+ * - Default: '' (relative path — works when nginx/Vite proxy routes /api to backend)
+ * - Development: http://localhost:8000 (Vite proxy in vite.config.js)
+ * - Docker: http://backend:8000 (nginx proxy in frontend/nginx.conf)
+ * - Production: https://your-api.com (set in deployment env vars)
+ *
+ * All API service modules use relative paths (e.g., api.post('/auth/login'))
+ * which are resolved against the configured VITE_API_URL at runtime.
+ */
+
+// API base URL — defaults to empty string (relative) for nginx proxy setups.
+// Set VITE_API_URL=http://localhost:8000/api/v1 for local dev without Docker.
+// Set VITE_API_URL=https://your-api.com/api/v1 for production.
+export const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
 export const APP_NAME = 'SecureCloud AI';
 export const APP_TAGLINE = 'Enterprise Privacy Security Platform';

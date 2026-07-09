@@ -4,6 +4,13 @@
 # Defines the backend web service and PostgreSQL database.
 # Apply with:  render blueprint apply
 # Or connect this repo to Render for automatic deployment.
+#
+# IMPORTANT: After deploying, set these secrets in Render Dashboard:
+#   - SECRET_KEY (generate with: openssl rand -hex 32)
+#   - GOOGLE_CLIENT_ID
+#   - GOOGLE_CLIENT_SECRET
+#   - GOOGLE_CLOUD_PROJECT
+#   - GCS_BUCKET_NAME
 ###############################################################################
 
 services:
@@ -22,7 +29,7 @@ services:
 
     startCommand: |
       cd backend
-      uvicorn app.main:app --host 0.0.0.0 --port $PORT
+      uvicorn server:app --host 0.0.0.0 --port $PORT
 
     healthCheckPath: /api/v1/health
 
@@ -45,20 +52,44 @@ services:
         fromDatabase:
           name: privacy-platform-db
           property: connectionString
+
+      # CORS — must include your frontend URL
       - key: CORS_ORIGINS
+        value: https://privacy-platform.vercel.app,http://localhost:3000,http://localhost:5173
+      - key: FRONTEND_URL
         value: https://privacy-platform.vercel.app
-      - key: OLLAMA_BASE_URL
-        value: http://ollama:11434  # Or your hosted Ollama endpoint
-      - key: AI_ENABLED
-        value: "true"
-      - key: DLP_ENABLED
-        value: "true"
+
+      # Google OAuth — set these in Render Dashboard
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+
+      # Google Cloud
       - key: GOOGLE_CLOUD_PROJECT
         sync: false
       - key: GCS_BUCKET_NAME
         sync: false
+      - key: DLP_ENABLED
+        value: "true"
       - key: PUBSUB_ENABLED
         value: "false"
+
+      # AI / Ollama
+      - key: OLLAMA_BASE_URL
+        value: http://ollama:11434  # Or your hosted Ollama endpoint
+      - key: AI_ENABLED
+        value: "true"
+
+      # ngrok / public URL support (set if using ngrok or custom domain)
+      - key: NGROK_URL
+        value: ""
+      - key: PUBLIC_URL
+        value: ""
+      - key: SECURE_COOKIES
+        value: "true"
+
+      # Application
       - key: MAX_UPLOAD_SIZE_MB
         value: "50"
       - key: LOG_LEVEL
