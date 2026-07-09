@@ -14,7 +14,7 @@ services:
     name: privacy-platform-backend
     env: python
     region: oregon
-    plan: starter
+    plan: free
 
     buildCommand: |
       cd backend
@@ -67,6 +67,6 @@ services:
 databases:
   - name: privacy-platform-db
     region: oregon
-    plan: starter
+    plan: free
     databaseName: privacy_platform
     ipAllowList: []
