@@ -23,8 +23,10 @@ if config.config_file_name is not None:
 from app.models import Base  # noqa: E402
 from app.core.config.settings import settings  # noqa: E402
 
-# Override sqlalchemy.url with the sync version for Alembic
-config.set_main_option("sqlalchemy.url", settings.DATABASE_SYNC_URL)
+# Override sqlalchemy.url with the sync version for Alembic offline mode
+# DATABASE_SYNC_URL is the sync postgresql:// URL (for offline SQL generation)
+# DATABASE_URL is the async postgresql+asyncpg:// URL (for online migrations)
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 target_metadata = Base.metadata
 
@@ -58,7 +60,7 @@ def do_run_migrations(connection: Connection) -> None:
 async def run_async_migrations() -> None:
     """Run migrations in 'online' mode using the async engine."""
     configuration = config.get_section(config.config_ini_section)
-    configuration["sqlalchemy.url"] = settings.DATABASE_SYNC_URL
+    configuration["sqlalchemy.url"] = settings.DATABASE_URL
     connectable = async_engine_from_config(
         configuration,
         prefix="sqlalchemy.",

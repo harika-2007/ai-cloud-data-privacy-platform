@@ -5,11 +5,14 @@ exception handlers, and lifecycle management.
 """
 
 import logging
+import os
+import re
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.core.config.settings import settings
 from app.core.database import initialize_database, close_database_connection
@@ -17,6 +20,35 @@ from app.utils.exceptions import AppException
 from app.utils.logging import setup_logging
 
 logger = logging.getLogger(__name__)
+
+
+def get_cors_origins() -> list[str]:
+    """Return the list of allowed CORS origins.
+
+    In development mode with CORS_ORIGINS=*, allows all origins.
+    Otherwise returns the explicit origins list + any detected ngrok origin.
+    """
+    origins = settings.cors_origins_list
+
+    # If wildcard is set in development, trust the user explicitly asked for it
+    if settings.use_cors_wildcard:
+        return ["*"]
+
+    # Ensure common localhost variants are always present
+    localhost_patterns = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:8000",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:8000",
+    ]
+    for origin in localhost_patterns:
+        if origin not in origins:
+            origins.append(origin)
+
+    return origins
 
 
 @asynccontextmanager
@@ -35,7 +67,14 @@ async def lifespan(app: FastAPI):
             "    3. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to backend/.env"
         )
     else:
-        logger.info("Google OAuth is configured (client_id: %s...)", settings.GOOGLE_CLIENT_ID[:20])
+        logger.info(
+            "Google OAuth is configured (client_id: %s...)",
+            settings.GOOGLE_CLIENT_ID[:20],
+        )
+
+    # Log CORS configuration
+    cors_origins = get_cors_origins()
+    logger.info("CORS origins: %s", cors_origins)
 
     try:
         await initialize_database()
@@ -59,13 +98,42 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json",
     )
 
-    # CORS middleware
+    # CORS middleware — use allow_origins=['*'] only in development
+    # when explicitly configured, otherwise use granular origins.
+    cors_origins = get_cors_origins()
+    allow_all = cors_origins == ["*"]
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins_list,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_origins=cors_origins if not allow_all else ["*"],
+        allow_origin_regex=".*" if allow_all else None,
+        allow_credentials=True if not allow_all else True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+        allow_headers=[
+            "Content-Type",
+            "Authorization",
+            "Accept",
+            "Origin",
+            "X-Requested-With",
+            "X-CSRF-Token",
+            "X-API-Key",
+            "Cache-Control",
+        ],
+        expose_headers=[
+            "Content-Length",
+            "X-RateLimit-Limit",
+            "X-RateLimit-Remaining",
+        ],
+        max_age=600,  # Preflight cache for 10 minutes
+    )
+
+    # Proxy headers middleware — enables correct client IP and protocol
+    # detection when behind Render's proxy or any reverse proxy.
+    # This works regardless of whether Uvicorn is started via CLI or
+    # the __main__ block (unlike uvicorn's --proxy-headers CLI flag).
+    app.add_middleware(
+        ProxyHeadersMiddleware,
+        trusted_hosts="*",
     )
 
     # Exception handlers
@@ -129,11 +197,14 @@ app = create_app()
 
 if __name__ == "__main__":
     import uvicorn
+    port = int(os.getenv("PORT", "8000"))
     uvicorn.run(
         "server:app",
         host="0.0.0.0",
-        port=8000,
+        port=port,
         reload=settings.DEBUG,
         reload_excludes=[".venv/*", ".venv"],
         log_level=settings.LOG_LEVEL.lower(),
+        proxy_headers=True,
+        forwarded_allow_ips="*",
     )
