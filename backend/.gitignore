@@ -143,11 +143,11 @@ dmypy.json
 .DS_Store
 Thumbs.db
 
-# Application
-uploads/*
-!uploads/.gitkeep
-reports/*
-!reports/.gitkeep
+# Application — runtime output directories (anchored to backend/ root only)
+/uploads/*
+!/uploads/.gitkeep
+/reports/*
+!/reports/.gitkeep
 app.log
 *.db
 

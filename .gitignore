@@ -40,9 +40,13 @@ Thumbs.db
 .env.production
 .env.development
 
-# Uploads
-uploads/
-reports/
+# Uploads — runtime files only, NOT source packages
+/backend/uploads/
+/uploads/
+
+# Reports — runtime output only, NOT Python packages like app/api/v1/reports/
+/backend/reports/
+/reports/
 
 # Docker
 .docker/
