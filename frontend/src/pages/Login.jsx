@@ -61,8 +61,8 @@ export default function Login() {
     // - Docker/nginx: proxied by nginx to backend
     // - ngrok: proxied by nginx to backend
     // - Production: proxied by reverse proxy to backend
-    iconst handleGoogleSignIn = () => {
-  window.location.assign(`${API_BASE_URL}/auth/google/login`);
+  const handleGoogleSignIn = () => {
+     window.location.assign(`${API_BASE_URL}/auth/google/login`);
 };
   const validate = () => {
     const errs = {};
