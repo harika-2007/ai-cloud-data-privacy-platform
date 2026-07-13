@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { API_BASE_URL } from "../utils/constants";
 import { Navigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../hooks/useAuth';
@@ -60,7 +61,7 @@ export default function Login() {
     // - Docker/nginx: proxied by nginx to backend
     // - ngrok: proxied by nginx to backend
     // - Production: proxied by reverse proxy to backend
-    window.location.assign('/api/v1/auth/google/login');
+    window.location.assign(`${API_BASE_URL}/auth/google/login`);
   };
 
   const validate = () => {
