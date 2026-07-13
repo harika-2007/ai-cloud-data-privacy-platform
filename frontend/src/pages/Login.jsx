@@ -61,12 +61,9 @@ export default function Login() {
     // - Docker/nginx: proxied by nginx to backend
     // - ngrok: proxied by nginx to backend
     // - Production: proxied by reverse proxy to backend
-    import { API_BASE_URL } from "../utils/constants";
-
-// ...
-
-window.location.assign(`${API_BASE_URL}/auth/google/login`);
-
+    iconst handleGoogleSignIn = () => {
+  window.location.assign(`${API_BASE_URL}/auth/google/login`);
+};
   const validate = () => {
     const errs = {};
     if (!form.email.trim()) errs.email = 'Email is required';
