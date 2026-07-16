@@ -1,30 +1,22 @@
-"""Authentication service implementing business logic for user management.
+"""Authentication service implementing Google OAuth 2.0 business logic.
 
-Provides registration, login, Google OAuth 2.0, token refresh, password
-change, and user lookup operations. All database access is handled through
-UserRepository.
+Provides Google Sign-In authentication, token refresh, and user lookup
+operations. Only Google OAuth is supported — no email/password auth.
+All database access is handled through UserRepository.
 """
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional
 
-from app.core.config.settings import settings
 from app.core.security import (
     create_access_token,
     create_refresh_token,
     decode_token,
-    hash_password,
-    verify_password,
 )
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth import TokenResponse, UserResponse
-from app.utils.exceptions import (
-    DuplicateException,
-    NotFoundException,
-    UnauthorizedException,
-)
+from app.utils.exceptions import NotFoundException, UnauthorizedException
 
 logger = logging.getLogger(__name__)
 
@@ -43,89 +35,6 @@ class AuthService:
             user_repository: Repository instance for User data access.
         """
         self.user_repo = user_repository
-
-    # ------------------------------------------------------------------
-    # Local (email/password) authentication
-    # ------------------------------------------------------------------
-
-    async def register_user(
-        self, name: str, email: str, password: str
-    ) -> TokenResponse:
-        """Register a new user account with email/password.
-
-        Creates a new user with the given credentials, hashes the password,
-        and returns JWT tokens for immediate authentication.
-
-        Args:
-            name: The display name for the new user.
-            email: The email address (must be unique).
-            password: The plain-text password (will be hashed before storage).
-
-        Returns:
-            TokenResponse containing access token, refresh token, and user data.
-
-        Raises:
-            DuplicateException: If a user with the given email already exists.
-        """
-        existing = await self.user_repo.get_by_email(email)
-        if existing:
-            logger.warning("Registration attempted with existing email: %s", email)
-            raise DuplicateException("User", email)
-
-        password_hash = hash_password(password)
-        user = await self.user_repo.create(
-            name=name,
-            email=email,
-            password_hash=password_hash,
-            provider="LOCAL",
-            role="user",
-            is_active=True,
-        )
-
-        logger.info("User registered successfully: %s (%s)", user.email, user.id)
-
-        return await self._build_token_response(user)
-
-    async def authenticate_user(self, email: str, password: str) -> TokenResponse:
-        """Authenticate a user with email and password.
-
-        Verifies credentials and returns JWT tokens on success.
-
-        Args:
-            email: The user's email address.
-            password: The user's plain-text password.
-
-        Returns:
-            TokenResponse containing access token, refresh token, and user data.
-
-        Raises:
-            UnauthorizedException: If credentials are invalid or user is inactive.
-        """
-        user = await self.user_repo.get_by_email(email)
-        if not user:
-            logger.warning("Login attempted with unknown email: %s", email)
-            raise UnauthorizedException("Invalid email or password")
-
-        if not user.password_hash:
-            logger.warning(
-                "Login attempted for Google-only user with password: %s", email
-            )
-            raise UnauthorizedException(
-                "This account uses Google Sign-In. Please sign in with Google."
-            )
-
-        if not verify_password(password, user.password_hash):
-            logger.warning("Login attempted with invalid password for: %s", email)
-            raise UnauthorizedException("Invalid email or password")
-
-        if not user.is_active:
-            logger.warning("Login attempted for inactive user: %s", email)
-            raise UnauthorizedException("Account is deactivated")
-
-        await self.user_repo.update_last_login(user.id)
-        logger.info("User authenticated successfully: %s", user.email)
-
-        return await self._build_token_response(user)
 
     # ------------------------------------------------------------------
     # Google OAuth 2.0 authentication
@@ -257,41 +166,6 @@ class AuthService:
 
         return await self._build_token_response(user)
 
-    async def change_password(
-        self, user_id: str, current_password: str, new_password: str
-    ) -> None:
-        """Change a user's password.
-
-        Verifies the current password before updating to the new one.
-
-        Args:
-            user_id: The ID of the user changing their password.
-            current_password: The user's current password for verification.
-            new_password: The new password to set.
-
-        Raises:
-            NotFoundException: If no user with the given ID exists.
-            UnauthorizedException: If the current password is incorrect or user has no password.
-        """
-        user = await self.user_repo.get_or_raise(user_id)
-
-        if not user.password_hash:
-            raise UnauthorizedException(
-                "This account uses Google Sign-In and does not have a password."
-            )
-
-        if not verify_password(current_password, user.password_hash):
-            logger.warning(
-                "Password change attempted with incorrect current password for: %s",
-                user.email,
-            )
-            raise UnauthorizedException("Current password is incorrect")
-
-        new_password_hash = hash_password(new_password)
-        await self.user_repo.update(user_id, password_hash=new_password_hash)
-
-        logger.info("Password changed successfully for user: %s", user.email)
-
     async def get_user_by_id(self, user_id: str) -> User:
         """Retrieve a user by their ID.
 
@@ -305,30 +179,6 @@ class AuthService:
             NotFoundException: If no user with the given ID exists.
         """
         return await self.user_repo.get_or_raise(user_id)
-
-    async def list_users(
-        self, page: int = 1, page_size: int = 20, role: Optional[str] = None
-    ) -> tuple[list[User], int]:
-        """List users with pagination and optional role filtering.
-
-        Args:
-            page: The page number (1-indexed).
-            page_size: Number of users per page.
-            role: Optional role filter.
-
-        Returns:
-            A tuple of (list of User instances, total count).
-        """
-        skip = (page - 1) * page_size
-        filters = {}
-        if role:
-            filters["role"] = role
-
-        return await self.user_repo.get_all(
-            skip=skip,
-            limit=page_size,
-            **filters,
-        )
 
     # ------------------------------------------------------------------
     # Internal helpers

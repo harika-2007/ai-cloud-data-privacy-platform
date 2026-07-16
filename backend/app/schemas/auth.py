@@ -1,12 +1,13 @@
-"""Pydantic schemas for authentication module.
+"""Pydantic schemas for Google OAuth authentication.
 
-Defines request/response models for user registration, login,
-Google OAuth, token management, and role-based access control.
+Defines request/response models for Google Sign-In, token management,
+and role-based access control. Only Google OAuth is supported — no
+email/password schemas.
 """
 
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field
 
 
 class TokenPayload(BaseModel):
@@ -16,30 +17,6 @@ class TokenPayload(BaseModel):
     exp: int
     type: str = "access"
     iat: Optional[int] = None
-
-
-class UserRegisterRequest(BaseModel):
-    """Request schema for local user registration."""
-    name: str = Field(..., min_length=2, max_length=255)
-    email: EmailStr
-    password: str = Field(..., min_length=8, max_length=128)
-
-    @field_validator("password")
-    @classmethod
-    def validate_password_strength(cls, v: str) -> str:
-        if not any(c.isupper() for c in v):
-            raise ValueError("Password must contain at least one uppercase letter")
-        if not any(c.islower() for c in v):
-            raise ValueError("Password must contain at least one lowercase letter")
-        if not any(c.isdigit() for c in v):
-            raise ValueError("Password must contain at least one digit")
-        return v
-
-
-class UserLoginRequest(BaseModel):
-    """Request schema for local user login."""
-    email: EmailStr
-    password: str
 
 
 class GoogleLoginRequest(BaseModel):
@@ -82,18 +59,3 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 
-class ChangePasswordRequest(BaseModel):
-    """Request schema for changing password."""
-    current_password: str
-    new_password: str = Field(..., min_length=8, max_length=128)
-
-    @field_validator("new_password")
-    @classmethod
-    def validate_new_password(cls, v: str) -> str:
-        if not any(c.isupper() for c in v):
-            raise ValueError("Password must contain at least one uppercase letter")
-        if not any(c.islower() for c in v):
-            raise ValueError("Password must contain at least one lowercase letter")
-        if not any(c.isdigit() for c in v):
-            raise ValueError("Password must contain at least one digit")
-        return v

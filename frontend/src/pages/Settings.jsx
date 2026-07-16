@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  User, Lock, Bell, Shield, Cloud, Info, Save, Eye, EyeOff, Check,
+  User, Lock, Bell, Shield, Cloud, Info, Save, Check,
   Key, Smartphone, Globe, Server, Mail, Loader2,
   ChevronRight, ExternalLink, Monitor, Moon, Sun, LogOut,
 } from 'lucide-react';
@@ -262,163 +262,33 @@ function ProfileSettings({ user, updateUser }) {
 
 /* ========== Security Tab ========== */
 function SecuritySettings() {
-  const [pwdForm, setPwdForm] = useState({
-    current_password: '',
-    new_password: '',
-    confirm_password: '',
-  });
-  const [changing, setChanging] = useState(false);
-  const [showCurrent, setShowCurrent] = useState(false);
-  const [showNew, setShowNew] = useState(false);
-  const [errors, setErrors] = useState({});
   const [mfaEnabled, setMfaEnabled] = useState(false);
-
-  const passwordStrength = (pwd) => {
-    let score = 0;
-    if (pwd.length >= 8) score++;
-    if (/(?=.*[a-z])/.test(pwd)) score++;
-    if (/(?=.*[A-Z])/.test(pwd)) score++;
-    if (/(?=.*\d)/.test(pwd)) score++;
-    if (/(?=.*[!@#$%^&*])/.test(pwd)) score++;
-    return score;
-  };
-
-  const validate = () => {
-    const errs = {};
-    if (!pwdForm.current_password) errs.current_password = 'Current password is required';
-    if (!pwdForm.new_password) errs.new_password = 'New password is required';
-    else if (pwdForm.new_password.length < 8) errs.new_password = 'Must be at least 8 characters';
-    if (pwdForm.new_password !== pwdForm.confirm_password) errs.confirm_password = 'Passwords do not match';
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!validate()) return;
-    setChanging(true);
-    try {
-      await authService.changePassword(pwdForm.current_password, pwdForm.new_password);
-      toast.success('Password changed successfully');
-      setPwdForm({ current_password: '', new_password: '', confirm_password: '' });
-      setErrors({});
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to change password');
-    } finally {
-      setChanging(false);
-    }
-  };
-
-  const strength = passwordStrength(pwdForm.new_password);
-  const strengthLabel = ['Very Weak', 'Weak', 'Fair', 'Good', 'Strong', 'Very Strong'][strength];
-  const strengthColors = [
-    'bg-red-500', 'bg-red-400', 'bg-yellow-500', 'bg-yellow-400', 'bg-green-400', 'bg-emerald-500',
-  ];
-
-  const checks = [
-    { label: '8+ characters', test: pwdForm.new_password.length >= 8 },
-    { label: 'Lowercase', test: /(?=.*[a-z])/.test(pwdForm.new_password) },
-    { label: 'Uppercase', test: /(?=.*[A-Z])/.test(pwdForm.new_password) },
-    { label: 'Number', test: /(?=.*\d)/.test(pwdForm.new_password) },
-    { label: 'Special char', test: /(?=.*[!@#$%^&*])/.test(pwdForm.new_password) },
-  ];
 
   return (
     <div className="space-y-6">
-      {/* Password Change */}
+      {/* Authentication Method */}
       <div className="card">
         <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
           <Key className="w-4 h-4 text-cyber-500" />
-          Change Password
+          Authentication
         </h3>
 
-        <form onSubmit={handleSubmit} className="max-w-lg space-y-4">
-          <div>
-            <label className="label">Current Password</label>
-            <div className="relative">
-              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type={showCurrent ? 'text' : 'password'}
-                className={`input-field pl-10 pr-10 ${errors.current_password ? 'input-error' : ''}`}
-                value={pwdForm.current_password}
-                onChange={(e) => setPwdForm({ ...pwdForm, current_password: e.target.value })}
-                placeholder="Enter current password"
-              />
-              <button type="button" onClick={() => setShowCurrent(!showCurrent)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            {errors.current_password && <p className="text-red-500 text-xs mt-1">{errors.current_password}</p>}
+        <div className="flex items-center gap-3 p-4 rounded-xl bg-cyber-50 dark:bg-cyber-900/10 border border-cyber-200 dark:border-cyber-800 mb-4">
+          <div className="w-10 h-10 rounded-lg bg-cyber-100 dark:bg-cyber-900/30 flex items-center justify-center flex-shrink-0">
+            <svg className="w-5 h-5" viewBox="0 0 24 24">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+            </svg>
           </div>
-
           <div>
-            <label className="label">New Password</label>
-            <div className="relative">
-              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type={showNew ? 'text' : 'password'}
-                className={`input-field pl-10 pr-10 ${errors.new_password ? 'input-error' : ''}`}
-                value={pwdForm.new_password}
-                onChange={(e) => setPwdForm({ ...pwdForm, new_password: e.target.value })}
-                placeholder="Enter new password"
-              />
-              <button type="button" onClick={() => setShowNew(!showNew)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-
-            {/* Strength bar */}
-            {pwdForm.new_password.length > 0 && (
-              <div className="mt-2">
-                <div className="flex gap-1 mb-1.5">
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <div key={i} className={`h-1.5 flex-1 rounded-full ${i <= strength ? strengthColors[strength] : 'bg-gray-200 dark:bg-gray-700'}`} />
-                  ))}
-                </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                  Strength: <span className="font-medium">{strengthLabel}</span>
-                </p>
-                <div className="flex flex-wrap gap-x-3 gap-y-1">
-                  {checks.map((c) => (
-                    <span key={c.label} className={`text-xs flex items-center gap-1 ${c.test ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500'}`}>
-                      <Check className={`w-3 h-3 ${c.test ? 'text-emerald-500' : 'text-gray-300 dark:text-gray-600'}`} />
-                      {c.label}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {errors.new_password && <p className="text-red-500 text-xs mt-1">{errors.new_password}</p>}
+            <p className="text-sm font-medium text-gray-900 dark:text-white">Google Sign-In</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              This account uses Google OAuth for authentication. Password-based login is not supported.
+            </p>
           </div>
-
-          <div>
-            <label className="label">Confirm New Password</label>
-            <input
-              type="password"
-              className={`input-field ${errors.confirm_password ? 'input-error' : ''}`}
-              value={pwdForm.confirm_password}
-              onChange={(e) => setPwdForm({ ...pwdForm, confirm_password: e.target.value })}
-              placeholder="Confirm new password"
-            />
-            {errors.confirm_password && <p className="text-red-500 text-xs mt-1">{errors.confirm_password}</p>}
-          </div>
-
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            type="submit"
-            disabled={changing}
-            className="btn-primary"
-          >
-            {changing ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> Updating...</>
-            ) : (
-              <><Lock className="w-4 h-4" /> Update Password</>
-            )}
-          </motion.button>
-        </form>
+        </div>
       </div>
 
       {/* Multi-Factor Auth */}

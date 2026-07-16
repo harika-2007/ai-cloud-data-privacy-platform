@@ -1,8 +1,8 @@
 """Authentication API routes.
 
-Provides endpoints for user registration, login, Google OAuth 2.0
-(both popup and server-side redirect flows), token refresh, user
-profile retrieval, and password changes.
+Provides endpoints for Google OAuth 2.0 sign-in (both popup and
+server-side redirect flows), token refresh, and user profile retrieval.
+Only Google Sign-In authentication is supported — no email/password auth.
 """
 
 import logging
@@ -20,13 +20,10 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth import (
-    ChangePasswordRequest,
     GoogleLoginRequest,
     RefreshTokenRequest,
     TokenPayload,
     TokenResponse,
-    UserLoginRequest,
-    UserRegisterRequest,
     UserResponse,
 )
 from app.services.auth.auth_service import AuthService
@@ -292,16 +289,28 @@ async def google_callback(
             url=f"{settings.FRONTEND_URL}/login?error=network_error",
             status_code=status.HTTP_302_FOUND,
         )
+    except ValueError as e:
+        logger.error("Google token verification failed: %s", e)
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_URL}/login?error=token_verification_failed",
+            status_code=status.HTTP_302_FOUND,
+        )
 
     # Create or update the user in the database
     try:
+        logger.info("=== GOOGLE CALLBACK STEP 1: UserRepository and AuthService creation ===")
         user_repo = UserRepository(db)
         auth_service = AuthService(user_repo)
+        logger.info("=== GOOGLE CALLBACK STEP 1 OK ===")
 
+        logger.info("=== GOOGLE CALLBACK STEP 2: Extract user info ===")
+        logger.info("user_info keys: %s", list(user_info.keys()) if isinstance(user_info, dict) else "not a dict")
         google_id = user_info.get("sub") or user_info.get("id")
         email = user_info.get("email", "")
         name = user_info.get("name", email.split("@")[0])
         picture = user_info.get("picture", "")
+        logger.info("Google ID: %s, Email: %s, Name: %s", google_id, email, name)
+        logger.info("=== GOOGLE CALLBACK STEP 2 OK ===")
 
         if not google_id or not email:
             logger.error("Google user info missing required fields")
@@ -311,11 +320,18 @@ async def google_callback(
             )
 
         # Find existing user by google_id or email
+        logger.info("=== GOOGLE CALLBACK STEP 3: Lookup user ===")
+        logger.info("Looking up by google_id: %s", google_id)
         user = await user_repo.get_by_google_id(google_id)
+        logger.info("User by google_id: %s", user.id if user else "None")
         if not user:
+            logger.info("Looking up by email: %s", email)
             user = await user_repo.get_by_email(email)
+            logger.info("User by email: %s", user.id if user else "None")
+        logger.info("=== GOOGLE CALLBACK STEP 3 OK ===")
 
         if user:
+            logger.info("=== GOOGLE CALLBACK STEP 4a: Update existing user ===")
             update_data = {
                 "google_id": google_id,
                 "provider": "GOOGLE",
@@ -327,8 +343,11 @@ async def google_callback(
             }
             if name and not user.name.startswith("("):
                 update_data["name"] = name
+            logger.info("update_data keys: %s", list(update_data.keys()))
             user = await user_repo.update(user.id, **update_data)
+            logger.info("=== GOOGLE CALLBACK STEP 4a OK ===")
         else:
+            logger.info("=== GOOGLE CALLBACK STEP 4b: Create new user ===")
             user = await user_repo.create(
                 name=name or email.split("@")[0],
                 email=email,
@@ -341,26 +360,36 @@ async def google_callback(
                 is_active=True,
                 last_login=datetime.now(timezone.utc),
             )
+            logger.info("=== GOOGLE CALLBACK STEP 4b OK ===")
+
+        logger.info("Created/updated user ID: %s", user.id)
+        logger.info("Created/updated user ID type: %s", type(user.id))
 
         # Generate JWT tokens
+        logger.info("=== GOOGLE CALLBACK STEP 5: Generate JWT tokens ===")
         access_token = auth_service.create_token(user.id, user.role, "access")
         refresh_token = auth_service.create_token(user.id, user.role, "refresh")
+        logger.info("=== GOOGLE CALLBACK STEP 5 OK ===")
 
         # Redirect to frontend with tokens
         # Using URL fragment (#) instead of query params (?) to prevent
         # tokens from being logged by nginx/reverse proxies or stored
         # in browser history.
+        logger.info("=== GOOGLE CALLBACK STEP 6: Redirect to frontend ===")
         frontend_callback = (
             f"{settings.FRONTEND_URL}/auth/callback"
             f"#access_token={access_token}"
             f"&refresh_token={refresh_token}"
         )
+        logger.info("Frontend callback URL: %s", frontend_callback)
+        logger.info("=== GOOGLE CALLBACK COMPLETE - SUCCESS ===")
         return RedirectResponse(
             url=frontend_callback,
             status_code=status.HTTP_302_FOUND,
         )
 
     except AppException:
+        logger.error("=== GOOGLE CALLBACK APPEXCEPTION (re-raising) ===")
         raise
     except Exception as e:
         # Log FULL diagnostics before returning the error redirect.
@@ -524,65 +553,6 @@ async def google_login(
 
 
 # =========================================================================
-# Email/Password registration & login
-# =========================================================================
-
-
-@router.post(
-    "/register",
-    response_model=TokenResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Register a new user",
-    description="Creates a new user account with name, email, and password. "
-    "Returns JWT tokens on success.",
-)
-async def register(
-    request: UserRegisterRequest,
-    auth_service: AuthService = Depends(get_auth_service),
-):
-    """Register a new user account."""
-    try:
-        result = await auth_service.register_user(
-            name=request.name,
-            email=request.email,
-            password=request.password,
-        )
-        logger.info("New user registered: %s", request.email)
-        return result
-    except AppException:
-        raise
-    except Exception as e:
-        logger.error("Unexpected error during registration: %s", str(e))
-        raise
-
-
-@router.post(
-    "/login",
-    response_model=TokenResponse,
-    summary="Authenticate a user",
-    description="Authenticates a user with email and password. Returns JWT tokens "
-    "on success.",
-)
-async def login(
-    request: UserLoginRequest,
-    auth_service: AuthService = Depends(get_auth_service),
-):
-    """Authenticate a user and return JWT tokens."""
-    try:
-        result = await auth_service.authenticate_user(
-            email=request.email,
-            password=request.password,
-        )
-        logger.info("User logged in: %s", request.email)
-        return result
-    except AppException:
-        raise
-    except Exception as e:
-        logger.error("Unexpected error during login: %s", str(e))
-        raise
-
-
-# =========================================================================
 # Token management
 # =========================================================================
 
@@ -646,29 +616,3 @@ async def get_me(
     """Get the profile of the currently authenticated user."""
     user = await auth_service.get_user_by_id(current_user.sub)
     return UserResponse.model_validate(user)
-
-
-@router.post(
-    "/change-password",
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Change user password",
-    description="Changes the password for the currently authenticated user.",
-)
-async def change_password(
-    request: ChangePasswordRequest,
-    current_user: TokenPayload = Depends(get_current_user),
-    auth_service: AuthService = Depends(get_auth_service),
-):
-    """Change the password for the authenticated user."""
-    try:
-        await auth_service.change_password(
-            user_id=current_user.sub,
-            current_password=request.current_password,
-            new_password=request.new_password,
-        )
-        logger.info("Password changed for user: %s", current_user.sub)
-    except AppException:
-        raise
-    except Exception as e:
-        logger.error("Unexpected error during password change: %s", str(e))
-        raise

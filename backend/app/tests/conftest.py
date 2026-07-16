@@ -121,7 +121,7 @@ async def client(app: FastAPI) -> AsyncGenerator[AsyncClient, None]:
 async def test_user(db_session: AsyncSession) -> User:
     """Create a standard test user in the database."""
     user = User(
-        id="test-user-id",
+        id="00000000-0000-0000-0000-000000000001",
         name="Test User",
         email="testuser@example.com",
         password_hash=hash_password("TestPass123"),
@@ -140,7 +140,7 @@ async def test_user(db_session: AsyncSession) -> User:
 async def admin_user(db_session: AsyncSession) -> User:
     """Create an admin test user in the database."""
     user = User(
-        id="admin-user-id",
+        id="00000000-0000-0000-0000-000000000002",
         name="Admin User",
         email="adminuser@example.com",
         password_hash=hash_password("AdminPass123"),
@@ -159,7 +159,7 @@ async def admin_user(db_session: AsyncSession) -> User:
 async def inactive_user(db_session: AsyncSession) -> User:
     """Create an inactive (deactivated) test user."""
     user = User(
-        id="inactive-user-id",
+        id="00000000-0000-0000-0000-000000000003",
         name="Inactive User",
         email="inactive@example.com",
         password_hash=hash_password("InactivePass123"),

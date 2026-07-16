@@ -19,7 +19,7 @@ from pydantic import ValidationError
 from app.core.config.settings import settings
 from app.schemas.auth import TokenPayload
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_PREFIX}/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_PREFIX}/auth/google/login")
 
 _PASSWORD_PREHASH_LIMIT = 60  # Pre-hash passwords longer than this (bytes)
 

@@ -4,14 +4,7 @@ import { Navigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../hooks/useAuth';
 import {
-  Mail,
-  Lock,
-  Eye,
-  EyeOff,
   Shield,
-  ArrowRight,
-  ChevronDown,
-  ChevronUp,
   Cloud,
   Globe,
   Users,
@@ -46,12 +39,8 @@ function ParticleField() {
 }
 
 export default function Login() {
-  const { login, isAuthenticated } = useAuth();
-  const [form, setForm] = useState({ email: '', password: '' });
+  const { isAuthenticated } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showEmailLogin, setShowEmailLogin] = useState(false);
-  const [errors, setErrors] = useState({});
 
   if (isAuthenticated) return <Navigate to="/dashboard" replace />;
 
@@ -63,27 +52,6 @@ const handleGoogleSignIn = () => {
   // - Production: proxied by reverse proxy to backend
   window.location.assign(`${API_BASE_URL}/auth/google/login`);
 };
-  const validate = () => {
-    const errs = {};
-    if (!form.email.trim()) errs.email = 'Email is required';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = 'Invalid email format';
-    if (!form.password) errs.password = 'Password is required';
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!validate()) return;
-    setLoading(true);
-    try {
-      await login(form.email, form.password);
-    } catch {
-      // handled in AuthContext
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div className="min-h-screen flex">
@@ -200,6 +168,7 @@ const handleGoogleSignIn = () => {
           <button
             type="button"
             onClick={handleGoogleSignIn}
+            disabled={loading}
             className="w-full relative flex items-center justify-center gap-3 px-6 py-3.5 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 transition-all duration-200 shadow-sm hover:shadow-md hover:bg-gray-50 dark:hover:bg-gray-750 active:scale-[0.98]"
           >
             <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
@@ -208,146 +177,35 @@ const handleGoogleSignIn = () => {
               <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
               <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
             </svg>
-            <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">
-              Continue with Google
-            </span>
+            {loading ? (
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">Signing in...</span>
+              </div>
+            ) : (
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                Continue with Google
+              </span>
+            )}
           </button>
-
-          {/* OR Divider */}
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-200 dark:border-gray-700" />
-            </div>
-            <div className="relative flex justify-center">
-              <span className="px-3 text-xs text-gray-400 bg-white dark:bg-gray-900">OR</span>
-            </div>
-          </div>
 
           {/* Microsoft Sign-In */}
-          <button
-            disabled
-            className="w-full flex items-center justify-center gap-3 px-6 py-3.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 opacity-60 cursor-not-allowed transition-all duration-200"
-          >
-            <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 23 23">
-              <rect x="1" y="1" width="10" height="10" fill="#f25022" />
-              <rect x="12" y="1" width="10" height="10" fill="#7fba00" />
-              <rect x="1" y="12" width="10" height="10" fill="#00a4ef" />
-              <rect x="12" y="12" width="10" height="10" fill="#ffb900" />
-            </svg>
-            <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">
-              Continue with Microsoft
-            </span>
-          </button>
-
-          {/* Use email instead */}
-          <div className="mt-6 text-center">
+          <div className="mt-4">
             <button
-              type="button"
-              onClick={() => setShowEmailLogin(!showEmailLogin)}
-              className="inline-flex items-center gap-1 text-sm text-cyber-600 dark:text-cyber-400 hover:underline font-medium"
+              disabled
+              className="w-full flex items-center justify-center gap-3 px-6 py-3.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 opacity-60 cursor-not-allowed transition-all duration-200"
             >
-              {showEmailLogin ? (
-                <>Collapse email login <ChevronUp className="w-3.5 h-3.5" /></>
-              ) : (
-                <>Use email instead <ChevronDown className="w-3.5 h-3.5" /></>
-              )}
+              <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 23 23">
+                <rect x="1" y="1" width="10" height="10" fill="#f25022" />
+                <rect x="12" y="1" width="10" height="10" fill="#7fba00" />
+                <rect x="1" y="12" width="10" height="10" fill="#00a4ef" />
+                <rect x="12" y="12" width="10" height="10" fill="#ffb900" />
+              </svg>
+              <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">
+                Continue with Microsoft
+              </span>
             </button>
           </div>
-
-          {/* Collapsible Email Login */}
-          <motion.div
-            initial={false}
-            animate={{
-              height: showEmailLogin ? 'auto' : 0,
-              opacity: showEmailLogin ? 1 : 0,
-            }}
-            className="overflow-hidden"
-          >
-            <form onSubmit={handleSubmit} className="space-y-4 pt-4">
-              {/* Email */}
-              <div>
-                <label htmlFor="email" className="label">Email Address</label>
-                <div className="input-group">
-                  <Mail className="input-icon" />
-                  <input
-                    id="email"
-                    type="email"
-                    className={`input-with-icon ${errors.email ? 'input-error' : ''}`}
-                    placeholder="you@company.com"
-                    value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    disabled={loading}
-                    autoComplete="email"
-                  />
-                </div>
-                {errors.email && (
-                  <motion.p
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-red-500 text-xs mt-1.5"
-                  >
-                    {errors.email}
-                  </motion.p>
-                )}
-              </div>
-
-              {/* Password */}
-              <div>
-                <label htmlFor="password" className="label">Password</label>
-                <div className="input-group">
-                  <Lock className="input-icon" />
-                  <input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    className={`input-with-icon pr-10 ${errors.password ? 'input-error' : ''}`}
-                    placeholder="Enter your password"
-                    value={form.password}
-                    onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    disabled={loading}
-                    autoComplete="current-password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                    tabIndex={-1}
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                {errors.password && (
-                  <motion.p
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-red-500 text-xs mt-1.5"
-                  >
-                    {errors.password}
-                  </motion.p>
-                )}
-              </div>
-
-              {/* Submit */}
-              <motion.button
-                type="submit"
-                disabled={loading}
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
-                className="btn-primary w-full py-3"
-              >
-                {loading ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Signing in...
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center gap-2">
-                    Sign In
-                    <ArrowRight className="w-4 h-4" />
-                  </div>
-                )}
-              </motion.button>
-            </form>
-          </motion.div>
 
           {/* Footer */}
           <p className="text-xs text-center text-gray-400 dark:text-gray-500 mt-8">
