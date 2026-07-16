@@ -363,7 +363,49 @@ async def google_callback(
     except AppException:
         raise
     except Exception as e:
-        logger.error("Error processing Google OAuth callback: %s", e)
+        # Log FULL diagnostics before returning the error redirect.
+        # exception() includes the full Python traceback in the log.
+        logger.exception("Google OAuth callback failed: %s", e)
+
+        # Log safe local variables (exclude JWT tokens and secrets)
+        logger.error("Callback diagnostics — safe state:")
+        logger.error("  exception_type: %s", type(e).__name__)
+        logger.error("  exception_file: %s", __file__)
+
+        # user_info from Google (safe — only log keys, not values)
+        try:
+            logger.error("  user_info_keys: %s", list(user_info.keys()))
+        except Exception:
+            logger.error("  user_info_keys: <not available>")
+
+        # Extraction results (safe — no secrets)
+        try:
+            logger.error("  google_id_prefix: %s", google_id[:8] + "..." if google_id else None)
+        except Exception:
+            logger.error("  google_id_prefix: <not available>")
+        try:
+            logger.error("  email: %s", email)
+        except Exception:
+            logger.error("  email: <not available>")
+        try:
+            logger.error("  name_provided: %s", bool(name))
+        except Exception:
+            logger.error("  name: <not available>")
+        try:
+            logger.error("  picture_provided: %s", bool(picture))
+        except Exception:
+            logger.error("  picture: <not available>")
+        try:
+            logger.error("  user_found: %s", user.id if user else False)
+        except Exception:
+            logger.error("  user: <not available>")
+
+        # Database state
+        try:
+            logger.error("  db_is_null: %s", db is None)
+        except Exception:
+            pass
+
         return RedirectResponse(
             url=f"{settings.FRONTEND_URL}/login?error=server_error",
             status_code=status.HTTP_302_FOUND,
